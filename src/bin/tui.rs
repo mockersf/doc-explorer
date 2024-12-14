@@ -46,11 +46,7 @@ impl CurrentState {
     async fn check_vector_db(config: &Config) -> bool {
         let chroma: ChromaClient = ChromaClient::new(Default::default());
 
-        let mut hash = DefaultHasher::new();
-        config.hash(&mut hash);
-        let hash = hash.finish().to_string();
-
-        chroma.get_collection(&hash).await.is_ok()
+        chroma.get_collection(&config.as_db_name()).await.is_ok()
     }
 }
 
@@ -66,6 +62,14 @@ struct Config {
     target: String,
     embedding_model: String,
     distance: Distance,
+}
+
+impl Config {
+    fn as_db_name(&self) -> String {
+        let mut hash = DefaultHasher::new();
+        self.hash(&mut hash);
+        hash.finish().to_string()
+    }
 }
 
 impl Default for Config {
@@ -93,6 +97,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             generate_jsons::panel,
             generate_docs::panel,
             download_model::panel,
+            generate_embeddings::panel,
             unimplemented::panel::<1>,
             unimplemented::panel::<4>,
             unimplemented::panel::<5>,
@@ -271,6 +276,7 @@ enum CurrentAction {
     StartDb,
     StartOllama,
     DownloadModel,
+    GenerateEmbeddings,
 }
 
 impl CurrentAction {
@@ -283,6 +289,7 @@ impl CurrentAction {
             4 => CurrentAction::StartDb,
             5 => CurrentAction::StartOllama,
             6 => CurrentAction::DownloadModel,
+            7 => CurrentAction::GenerateEmbeddings,
             _ => CurrentAction::Menu,
         }
     }
@@ -352,6 +359,13 @@ mod actions {
             list_state
                 .list
                 .push(("Start Vector Database".to_string(), CurrentAction::StartDb));
+        }
+
+        if state.services.ollama && state.services.db && state.model && state.services.docs {
+            list_state.list.push((
+                "Generate Embeddings".to_string(),
+                CurrentAction::GenerateEmbeddings,
+            ));
         }
     }
 
@@ -455,11 +469,8 @@ mod generate_jsons {
         area.height = 8;
         area.width -= 30;
 
-        let instructions = Line::from(vec![" Back to Menu ".into(), "<Space> ".blue().bold()]);
-
         let block = Block::bordered()
             .title(Line::from("Generate JSONs").bold().centered())
-            .title_bottom(instructions.right_aligned())
             .border_set(border::THICK);
 
         drawer.push_widget(Box::new(Clear), area, 1);
@@ -509,11 +520,8 @@ mod generate_docs {
         area.height = 8;
         area.width -= 30;
 
-        let instructions = Line::from(vec![" Back to Menu ".into(), "<Space> ".blue().bold()]);
-
         let block = Block::bordered()
             .title(Line::from("Generate Documents").bold().centered())
-            .title_bottom(instructions.right_aligned())
             .border_set(border::THICK);
 
         drawer.push_widget(Box::new(Clear), area, 1);
@@ -580,11 +588,88 @@ mod download_model {
         area.height = 8;
         area.width -= 30;
 
-        let instructions = Line::from(vec![" Back to Menu ".into(), "<Space> ".blue().bold()]);
+        let block = Block::bordered()
+            .title(Line::from("Download Model").bold().centered())
+            .border_set(border::THICK);
+
+        drawer.push_widget(Box::new(Clear), area, 1);
+        drawer.push_widget(
+            Box::new(
+                Paragraph::new(Line::from("Working... (can take a few minutes)").italic())
+                    .centered()
+                    .block(block),
+            ),
+            area,
+            2,
+        );
+    }
+}
+
+mod generate_embeddings {
+    use bevy_tokio_tasks::TokioTasksRuntime;
+    use doc_explorer::{embed::generate_embeddings, ollama::SimpleOllama};
+    use ratatecs::prelude::*;
+    use ratatui::widgets::{Block, Clear, Paragraph};
+    use symbols::border;
+
+    use crate::{Config, CurrentAction};
+
+    pub fn panel(app: &mut App) {
+        app.add_systems(
+            Update,
+            exit.run_if(in_state(CurrentAction::GenerateEmbeddings)),
+        );
+        app.add_systems(OnEnter(CurrentAction::GenerateEmbeddings), work);
+        app.add_systems(
+            PostUpdate,
+            render.run_if(in_state(CurrentAction::GenerateEmbeddings)),
+        );
+    }
+
+    #[derive(Resource)]
+    struct Done;
+
+    fn exit(
+        _done: Res<Done>,
+        mut commands: Commands,
+        mut next_state: ResMut<NextState<CurrentAction>>,
+    ) {
+        commands.remove_resource::<Done>();
+        next_state.set(CurrentAction::Menu);
+    }
+
+    fn work(runtime: ResMut<TokioTasksRuntime>, config: Res<Config>) {
+        let ollama = SimpleOllama::new(config.embedding_model.clone());
+        let db_name = config.as_db_name();
+        let distance = match config.distance {
+            crate::Distance::SquaredL2 => "l2",
+            crate::Distance::InnerProduct => "ip",
+            crate::Distance::Cosine => "cosine",
+        }
+        .to_string();
+        runtime.spawn_background_task(|mut ctx| async move {
+            generate_embeddings(ollama, &db_name, &distance)
+                .await
+                .unwrap();
+
+            ctx.run_on_main_thread(move |ctx| {
+                let world: &mut World = ctx.world;
+                world.insert_resource(Done);
+                world.resource_mut::<Config>().set_changed();
+            })
+            .await;
+        });
+    }
+    fn render(mut drawer: WidgetDrawer) {
+        let frame = drawer.get_frame();
+        let mut area = frame.area();
+        area.x += 15;
+        area.y = (area.height / 2 - 10).max(10);
+        area.height = 8;
+        area.width -= 30;
 
         let block = Block::bordered()
-            .title(Line::from("Generate JSONs").bold().centered())
-            .title_bottom(instructions.right_aligned())
+            .title(Line::from("Generate Embeddings").bold().centered())
             .border_set(border::THICK);
 
         drawer.push_widget(Box::new(Clear), area, 1);
