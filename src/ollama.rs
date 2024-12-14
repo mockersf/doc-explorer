@@ -28,7 +28,6 @@ impl SimpleOllama {
             }
         }
 
-        println!("downloading model {}", self.embedding_model);
         self.ollama
             .pull_model(self.embedding_model.clone(), false)
             .await?;

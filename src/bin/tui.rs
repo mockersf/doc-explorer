@@ -92,6 +92,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             actions::panel,
             generate_jsons::panel,
             generate_docs::panel,
+            download_model::panel,
             unimplemented::panel::<1>,
             unimplemented::panel::<4>,
             unimplemented::panel::<5>,
@@ -512,6 +513,77 @@ mod generate_docs {
 
         let block = Block::bordered()
             .title(Line::from("Generate Documents").bold().centered())
+            .title_bottom(instructions.right_aligned())
+            .border_set(border::THICK);
+
+        drawer.push_widget(Box::new(Clear), area, 1);
+        drawer.push_widget(
+            Box::new(
+                Paragraph::new(Line::from("Working... (can take a few minutes)").italic())
+                    .centered()
+                    .block(block),
+            ),
+            area,
+            2,
+        );
+    }
+}
+
+mod download_model {
+    use bevy_tokio_tasks::TokioTasksRuntime;
+    use doc_explorer::ollama::SimpleOllama;
+    use ratatecs::prelude::*;
+    use ratatui::widgets::{Block, Clear, Paragraph};
+    use symbols::border;
+
+    use crate::{Config, CurrentAction};
+
+    pub fn panel(app: &mut App) {
+        app.add_systems(Update, exit.run_if(in_state(CurrentAction::DownloadModel)));
+        app.add_systems(OnEnter(CurrentAction::DownloadModel), work);
+        app.add_systems(
+            PostUpdate,
+            render.run_if(in_state(CurrentAction::DownloadModel)),
+        );
+    }
+
+    #[derive(Resource)]
+    struct Done;
+
+    fn exit(
+        _done: Res<Done>,
+        mut commands: Commands,
+        mut next_state: ResMut<NextState<CurrentAction>>,
+    ) {
+        commands.remove_resource::<Done>();
+        next_state.set(CurrentAction::Menu);
+    }
+
+    fn work(runtime: ResMut<TokioTasksRuntime>, config: Res<Config>) {
+        let ollama = SimpleOllama::new(config.embedding_model.clone());
+        runtime.spawn_background_task(|mut ctx| async move {
+            ollama.download_model().await.unwrap();
+
+            ctx.run_on_main_thread(move |ctx| {
+                let world: &mut World = ctx.world;
+                world.insert_resource(Done);
+                world.resource_mut::<Config>().set_changed();
+            })
+            .await;
+        });
+    }
+    fn render(mut drawer: WidgetDrawer) {
+        let frame = drawer.get_frame();
+        let mut area = frame.area();
+        area.x += 15;
+        area.y = (area.height / 2 - 10).max(10);
+        area.height = 8;
+        area.width -= 30;
+
+        let instructions = Line::from(vec![" Back to Menu ".into(), "<Space> ".blue().bold()]);
+
+        let block = Block::bordered()
+            .title(Line::from("Generate JSONs").bold().centered())
             .title_bottom(instructions.right_aligned())
             .border_set(border::THICK);
 
