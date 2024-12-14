@@ -91,9 +91,10 @@ fn main() -> Result<(), Box<dyn Error>> {
             status::panel,
             actions::panel,
             generate_jsons::panel,
+            generate_docs::panel,
             unimplemented::panel::<1>,
-            unimplemented::panel::<3>,
             unimplemented::panel::<4>,
+            unimplemented::panel::<5>,
         ))
         .init_state::<CurrentAction>()
         .insert_resource(Config::default())
@@ -420,10 +421,9 @@ mod actions {
 }
 
 mod generate_jsons {
-
     use doc_explorer::json_generator::generate_jsons;
     use ratatecs::prelude::*;
-    use ratatui::widgets::{Block, Paragraph};
+    use ratatui::widgets::{Block, Clear, Paragraph};
     use symbols::border;
 
     use crate::{Config, CurrentAction};
@@ -461,6 +461,7 @@ mod generate_jsons {
             .title_bottom(instructions.right_aligned())
             .border_set(border::THICK);
 
+        drawer.push_widget(Box::new(Clear), area, 1);
         drawer.push_widget(
             Box::new(
                 Paragraph::new(Line::from("Working... (can take a few minutes)").italic())
@@ -468,7 +469,61 @@ mod generate_jsons {
                     .block(block),
             ),
             area,
-            1,
+            2,
+        );
+    }
+}
+
+mod generate_docs {
+    use doc_explorer::document::generate_docs;
+    use ratatecs::prelude::*;
+    use ratatui::widgets::{Block, Clear, Paragraph};
+    use symbols::border;
+
+    use crate::{Config, CurrentAction};
+
+    pub fn panel(app: &mut App) {
+        app.add_systems(Update, exit.run_if(in_state(CurrentAction::GenerateDocs)));
+        app.add_systems(OnExit(CurrentAction::GenerateDocs), work);
+        app.add_systems(
+            PostUpdate,
+            render.run_if(in_state(CurrentAction::GenerateDocs)),
+        );
+    }
+
+    fn exit(mut next_state: ResMut<NextState<CurrentAction>>) {
+        next_state.set(CurrentAction::Menu);
+    }
+
+    fn work(mut config: ResMut<Config>) {
+        config.set_changed();
+        generate_docs(config.target.clone());
+    }
+
+    fn render(mut drawer: WidgetDrawer) {
+        let frame = drawer.get_frame();
+        let mut area = frame.area();
+        area.x += 15;
+        area.y = (area.height / 2 - 10).max(10);
+        area.height = 8;
+        area.width -= 30;
+
+        let instructions = Line::from(vec![" Back to Menu ".into(), "<Space> ".blue().bold()]);
+
+        let block = Block::bordered()
+            .title(Line::from("Generate Documents").bold().centered())
+            .title_bottom(instructions.right_aligned())
+            .border_set(border::THICK);
+
+        drawer.push_widget(Box::new(Clear), area, 1);
+        drawer.push_widget(
+            Box::new(
+                Paragraph::new(Line::from("Working... (can take a few minutes)").italic())
+                    .centered()
+                    .block(block),
+            ),
+            area,
+            2,
         );
     }
 }
