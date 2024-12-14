@@ -24,11 +24,16 @@ pub fn generate_docs(entry: String) {
     let mut loaded_crates = vec![None; krate.external_crates.len() + 1];
 
     for ext_krate in &krate.external_crates {
+        if ext_krate.1.name == "typenum" {
+            continue;
+        }
         let Ok(json_string) = std::fs::read_to_string(format!("./jsons/{}.json", ext_krate.1.name))
         else {
             continue;
         };
-        let krate: rustdoc_types::Crate = serde_json::from_str(&json_string).unwrap();
+        let Ok(krate) = serde_json::from_str(&json_string) else {
+            panic!("Couldn't parse json for crate {}", ext_krate.1.name);
+        };
         loaded_crates[*ext_krate.0 as usize] = Some((ext_krate.1.name.clone(), krate));
     }
     loaded_crates[0] = Some(("bevy".to_string(), krate));
