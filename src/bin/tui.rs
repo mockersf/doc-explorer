@@ -98,6 +98,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             generate_docs::panel,
             download_model::panel,
             generate_embeddings::panel,
+            prompt::panel,
             unimplemented::panel::<1>,
             unimplemented::panel::<4>,
             unimplemented::panel::<5>,
@@ -196,7 +197,7 @@ mod status {
         area.x += 1;
         area.y += 1;
         area.height = 9;
-        area.width -= 1;
+        area.width -= 2;
 
         let title = Line::from(" Status ".bold());
         let block = Block::bordered()
@@ -277,6 +278,7 @@ enum CurrentAction {
     StartOllama,
     DownloadModel,
     GenerateEmbeddings,
+    Prompt,
 }
 
 impl CurrentAction {
@@ -366,6 +368,12 @@ mod actions {
                 "Generate Embeddings".to_string(),
                 CurrentAction::GenerateEmbeddings,
             ));
+        }
+
+        if state.db {
+            list_state
+                .list
+                .push(("Prompt!".to_string(), CurrentAction::Prompt));
         }
     }
 
@@ -681,6 +689,136 @@ mod generate_embeddings {
             ),
             area,
             2,
+        );
+    }
+}
+
+mod prompt {
+    use bevy_tokio_tasks::TokioTasksRuntime;
+    use doc_explorer::{ollama::SimpleOllama, prompt::retrieve};
+    use ratatecs::prelude::*;
+    use ratatui::widgets::{Block, Clear, List, Paragraph};
+    use symbols::border;
+
+    use crate::{Config, CurrentAction};
+
+    #[derive(Resource)]
+    struct PromptsAndResponses(Vec<(String, Vec<(String, f32)>)>);
+
+    #[derive(Resource)]
+    struct CurrentPrompt(String);
+
+    pub fn panel(app: &mut App) {
+        app.add_systems(Update, input.run_if(in_state(CurrentAction::Prompt)));
+        app.add_systems(OnEnter(CurrentAction::Prompt), |mut commands: Commands| {
+            commands.insert_resource(PromptsAndResponses(vec![]));
+            commands.insert_resource(CurrentPrompt("".to_string()));
+        });
+        app.add_systems(PostUpdate, render.run_if(in_state(CurrentAction::Prompt)));
+    }
+
+    fn input(
+        event: Res<BackendEvent>,
+        mut next_state: ResMut<NextState<CurrentAction>>,
+        mut current_prompt: ResMut<CurrentPrompt>,
+        runtime: ResMut<TokioTasksRuntime>,
+        config: Res<Config>,
+    ) {
+        if let Some(event) = &event.0 {
+            if let event::Event::Key(key_event) = event {
+                match key_event.code {
+                    event::KeyCode::Char(x) => {
+                        current_prompt.0.push(x);
+                    }
+                    event::KeyCode::Enter => {
+                        if current_prompt.0 == "stop" {
+                            next_state.set(CurrentAction::Menu);
+                        }
+                        let prompt = current_prompt.0.clone();
+                        current_prompt.0.clear();
+                        let ollama = SimpleOllama::new(config.embedding_model.clone());
+                        let db_name = config.as_db_name();
+                        runtime.spawn_background_task(|mut ctx| async move {
+                            let responses = retrieve(ollama, &db_name, &prompt).await.unwrap();
+
+                            ctx.run_on_main_thread(move |ctx| {
+                                let world: &mut World = ctx.world;
+                                let mut history = world.resource_mut::<PromptsAndResponses>();
+                                history.0.push((prompt, responses));
+                            })
+                            .await;
+                        });
+                    }
+                    _ => (),
+                }
+            }
+        }
+    }
+
+    fn render(
+        mut drawer: WidgetDrawer,
+        current_prompt: Res<CurrentPrompt>,
+        history: Res<PromptsAndResponses>,
+    ) {
+        let frame = drawer.get_frame();
+        let mut area = frame.area();
+        area.x += 5;
+        area.y += 5;
+        area.height -= 10;
+        area.width -= 10;
+
+        let block = Block::bordered()
+            .title(Line::from("Retrieve for prompt").bold().centered())
+            .border_set(border::THICK);
+
+        drawer.push_widget(Box::new(Clear), area, 2);
+        drawer.push_widget(Box::new(block), area, 3);
+
+        let prompt_block = Block::bordered()
+            .title(Line::from("Prompt:").italic().green().left_aligned())
+            .border_set(border::ROUNDED);
+        let mut prompt_area = area.clone();
+        prompt_area.y += 2;
+        prompt_area.x += 1;
+        prompt_area.height = 4;
+        prompt_area.width -= 2;
+        drawer.push_widget(
+            Box::new(Paragraph::new(Line::from(current_prompt.0.clone())).block(prompt_block)),
+            prompt_area,
+            4,
+        );
+
+        let mut prompt_area = area.clone();
+        prompt_area.y += 7;
+        prompt_area.x += 1;
+        prompt_area.height -= 8;
+        prompt_area.width -= 2;
+        let nb_lines = history.0.len() as i32 * 12;
+        drawer.push_widget(
+            Box::new(List::new(
+                history
+                    .0
+                    .iter()
+                    .flat_map(|(prompt, responses)| {
+                        std::iter::once(Text::from(vec![Line::from(vec![])]))
+                            .chain(std::iter::once(Text::from(vec![Line::from(vec![
+                                format!("> {}", prompt).into(),
+                            ])
+                            .italic()
+                            .green()])))
+                            .chain(responses.iter().map(|(response, distance)| {
+                                Text::from(vec![Line::from(vec![format!(
+                                    "  - {:<30} ({:.2})",
+                                    response, distance
+                                )
+                                .into()])])
+                            }))
+                    })
+                    .skip((nb_lines - prompt_area.height as i32).max(0) as usize)
+                    .collect::<Vec<_>>(),
+            )),
+            prompt_area,
+            4,
         );
     }
 }
