@@ -90,8 +90,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             app::panel,
             status::panel,
             actions::panel,
+            generate_jsons::panel,
             unimplemented::panel::<1>,
-            unimplemented::panel::<2>,
             unimplemented::panel::<3>,
             unimplemented::panel::<4>,
         ))
@@ -413,6 +413,60 @@ mod actions {
 
         drawer.push_widget(
             Box::new(List::new(actions).block(block).style(Style::new().white())),
+            area,
+            1,
+        );
+    }
+}
+
+mod generate_jsons {
+
+    use doc_explorer::json_generator::generate_jsons;
+    use ratatecs::prelude::*;
+    use ratatui::widgets::{Block, Paragraph};
+    use symbols::border;
+
+    use crate::{Config, CurrentAction};
+
+    pub fn panel(app: &mut App) {
+        app.add_systems(Update, exit.run_if(in_state(CurrentAction::GenerateJsons)));
+        app.add_systems(OnExit(CurrentAction::GenerateJsons), work);
+        app.add_systems(
+            PostUpdate,
+            render.run_if(in_state(CurrentAction::GenerateJsons)),
+        );
+    }
+
+    fn exit(mut next_state: ResMut<NextState<CurrentAction>>) {
+        next_state.set(CurrentAction::Menu);
+    }
+
+    fn work(mut config: ResMut<Config>) {
+        config.set_changed();
+        generate_jsons(config.target.clone());
+    }
+
+    fn render(mut drawer: WidgetDrawer) {
+        let frame = drawer.get_frame();
+        let mut area = frame.area();
+        area.x += 15;
+        area.y = (area.height / 2 - 10).max(10);
+        area.height = 8;
+        area.width -= 30;
+
+        let instructions = Line::from(vec![" Back to Menu ".into(), "<Space> ".blue().bold()]);
+
+        let block = Block::bordered()
+            .title(Line::from("Generate JSONs").bold().centered())
+            .title_bottom(instructions.right_aligned())
+            .border_set(border::THICK);
+
+        drawer.push_widget(
+            Box::new(
+                Paragraph::new(Line::from("Working... (can take a few minutes)").italic())
+                    .centered()
+                    .block(block),
+            ),
             area,
             1,
         );
