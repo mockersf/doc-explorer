@@ -1,0 +1,22 @@
+[package]
+name = "doc-explorer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+rustdoc-types = "0.32"
+serde = "1.0"
+serde_json = "1.0"
+chromadb = "1.1"
+ollama-rs = "0.2"
+tokio = { version = "1.42", features = ["full"] }
+ratatecs = { git = "https://github.com/vleue/ratatecs" }
+ratatui = "0.29.0"
+bevy = { version = "0.15.0", default-features = false, features = [
+    "multi_threaded",
+    "bevy_state",
+] }
+crossterm = "0.28.1"
+bevy-tokio-tasks = { git = "https://github.com/foxzool/bevy-tokio-tasks", branch = "upgrade" }
+xshell = "0.2"
