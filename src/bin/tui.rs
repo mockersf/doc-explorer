@@ -40,7 +40,7 @@ impl CurrentState {
                 return true;
             }
         }
-        return false;
+        false
     }
 
     async fn check_vector_db(config: &Config) -> bool {
@@ -50,6 +50,7 @@ impl CurrentState {
     }
 }
 
+#[expect(dead_code)]
 #[derive(Debug, Clone, Hash)]
 enum Distance {
     SquaredL2,
@@ -133,11 +134,9 @@ mod app {
     }
 
     fn exit_on_esc(event: Res<BackendEvent>, mut exit: EventWriter<AppExit>) {
-        if let Some(event) = &event.0 {
-            if let event::Event::Key(key_event) = event {
-                if key_event.code == event::KeyCode::Esc {
-                    exit.send(AppExit::Success);
-                }
+        if let Some(event::Event::Key(key_event)) = &event.0 {
+            if key_event.code == event::KeyCode::Esc {
+                exit.send(AppExit::Success);
             }
         }
     }
@@ -382,23 +381,18 @@ mod actions {
         event: Res<BackendEvent>,
         mut next_state: ResMut<NextState<CurrentAction>>,
     ) {
-        if let Some(event) = &event.0 {
-            if let event::Event::Key(key_event) = event {
-                match key_event.code {
-                    event::KeyCode::Up => {
-                        list_state.selected = list_state.selected.saturating_sub(1)
-                    }
-                    event::KeyCode::Down => {
-                        list_state.selected =
-                            (list_state.selected + 1).min(list_state.list.len() - 1)
-                    }
-                    event::KeyCode::Char(' ') => {
-                        if let Some(action) = list_state.list.get(list_state.selected) {
-                            next_state.set(action.1);
-                        }
-                    }
-                    _ => (),
+        if let Some(event::Event::Key(key_event)) = &event.0 {
+            match key_event.code {
+                event::KeyCode::Up => list_state.selected = list_state.selected.saturating_sub(1),
+                event::KeyCode::Down => {
+                    list_state.selected = (list_state.selected + 1).min(list_state.list.len() - 1)
                 }
+                event::KeyCode::Char(' ') => {
+                    if let Some(action) = list_state.list.get(list_state.selected) {
+                        next_state.set(action.1);
+                    }
+                }
+                _ => (),
             }
         }
     }
@@ -724,33 +718,31 @@ mod prompt {
         runtime: ResMut<TokioTasksRuntime>,
         config: Res<Config>,
     ) {
-        if let Some(event) = &event.0 {
-            if let event::Event::Key(key_event) = event {
-                match key_event.code {
-                    event::KeyCode::Char(x) => {
-                        current_prompt.0.push(x);
-                    }
-                    event::KeyCode::Enter => {
-                        if current_prompt.0 == "stop" {
-                            next_state.set(CurrentAction::Menu);
-                        }
-                        let prompt = current_prompt.0.clone();
-                        current_prompt.0.clear();
-                        let ollama = SimpleOllama::new(config.embedding_model.clone());
-                        let db_name = config.as_db_name();
-                        runtime.spawn_background_task(|mut ctx| async move {
-                            let responses = retrieve(ollama, &db_name, &prompt).await.unwrap();
-
-                            ctx.run_on_main_thread(move |ctx| {
-                                let world: &mut World = ctx.world;
-                                let mut history = world.resource_mut::<PromptsAndResponses>();
-                                history.0.push((prompt, responses));
-                            })
-                            .await;
-                        });
-                    }
-                    _ => (),
+        if let Some(event::Event::Key(key_event)) = &event.0 {
+            match key_event.code {
+                event::KeyCode::Char(x) => {
+                    current_prompt.0.push(x);
                 }
+                event::KeyCode::Enter => {
+                    if current_prompt.0 == "stop" {
+                        next_state.set(CurrentAction::Menu);
+                    }
+                    let prompt = current_prompt.0.clone();
+                    current_prompt.0.clear();
+                    let ollama = SimpleOllama::new(config.embedding_model.clone());
+                    let db_name = config.as_db_name();
+                    runtime.spawn_background_task(|mut ctx| async move {
+                        let responses = retrieve(ollama, &db_name, &prompt).await.unwrap();
+
+                        ctx.run_on_main_thread(move |ctx| {
+                            let world: &mut World = ctx.world;
+                            let mut history = world.resource_mut::<PromptsAndResponses>();
+                            history.0.push((prompt, responses));
+                        })
+                        .await;
+                    });
+                }
+                _ => (),
             }
         }
     }
@@ -777,7 +769,7 @@ mod prompt {
         let prompt_block = Block::bordered()
             .title(Line::from("Prompt:").italic().green().left_aligned())
             .border_set(border::ROUNDED);
-        let mut prompt_area = area.clone();
+        let mut prompt_area = area;
         prompt_area.y += 2;
         prompt_area.x += 1;
         prompt_area.height = 4;
@@ -788,7 +780,7 @@ mod prompt {
             4,
         );
 
-        let mut prompt_area = area.clone();
+        let mut prompt_area = area;
         prompt_area.y += 7;
         prompt_area.x += 1;
         prompt_area.height -= 8;
@@ -840,11 +832,9 @@ mod unimplemented {
     }
 
     fn exit(event: Res<BackendEvent>, mut next_state: ResMut<NextState<CurrentAction>>) {
-        if let Some(event) = &event.0 {
-            if let event::Event::Key(key_event) = event {
-                if key_event.code == event::KeyCode::Char(' ') {
-                    next_state.set(CurrentAction::Menu);
-                }
+        if let Some(event::Event::Key(key_event)) = &event.0 {
+            if key_event.code == event::KeyCode::Char(' ') {
+                next_state.set(CurrentAction::Menu);
             }
         }
     }
