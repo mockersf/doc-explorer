@@ -86,7 +86,7 @@ fn item_explorer(
                     }
                 }
             }
-            return item_explorer(used.id.unwrap(), current_crate, crates, visited, depth + 1);
+            item_explorer(used.id.unwrap(), current_crate, crates, visited, depth + 1)
         }
         rustdoc_types::ItemEnum::Union(_union) => todo!(),
         rustdoc_types::ItemEnum::Struct(stru) => {
