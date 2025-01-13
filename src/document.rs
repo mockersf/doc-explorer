@@ -108,8 +108,8 @@ fn item_explorer(
         rustdoc_types::ItemEnum::TypeAlias(type_alias) => {
             document_type_alias(item, type_alias);
         }
-        rustdoc_types::ItemEnum::Constant(constant) => {
-            document_constant(item, constant);
+        rustdoc_types::ItemEnum::Constant { type_: _, const_ } => {
+            document_constant(item, const_);
         }
         rustdoc_types::ItemEnum::Static(_) => {}
         rustdoc_types::ItemEnum::ExternType => todo!(),
@@ -232,7 +232,7 @@ pub fn document_function(item: &rustdoc_types::Item, func: &rustdoc_types::Funct
     let doc = FunctionDocument {
         name: item.name.as_ref().unwrap().to_string(),
         docs: item.docs.clone(),
-        signature: format!("{:?}", func.decl),
+        signature: format!("{:?}", func.sig),
     };
     doc.write();
 }
@@ -260,7 +260,11 @@ pub fn document_trait(item: &rustdoc_types::Item, trait_item: &rustdoc_types::Tr
     let doc = TraitDocument {
         name: item.name.as_ref().unwrap().to_string(),
         docs: item.docs.clone(),
-        items: trait_item.items.iter().map(|item| format!("{:?}", item)).collect(),
+        items: trait_item
+            .items
+            .iter()
+            .map(|item| format!("{:?}", item))
+            .collect(),
     };
     doc.write();
 }
@@ -301,7 +305,8 @@ pub fn document_type_alias(item: &rustdoc_types::Item, type_alias: &rustdoc_type
 
 impl TypeAliasDocument {
     pub fn write(&self) {
-        let mut file = std::fs::File::create(format!("docs/type_aliases/{}.md", self.name)).unwrap();
+        let mut file =
+            std::fs::File::create(format!("docs/type_aliases/{}.md", self.name)).unwrap();
 
         write!(file, "{} is a type alias.\n\n", self.name).unwrap();
         if let Some(docs) = &self.docs {
