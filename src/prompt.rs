@@ -9,7 +9,7 @@ pub async fn retrieve(
 ) -> Result<Vec<(String, f32)>, Box<dyn std::error::Error>> {
     let chroma = ChromaClient::new(Default::default());
 
-    let collection = chroma.get_collection(&collection_name).await?;
+    let collection = chroma.get_collection(collection_name).await?;
 
     let embeddings = ollama.embeddings(prompt).await?;
     let query = QueryOptions {
