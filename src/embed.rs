@@ -30,5 +30,25 @@ pub async fn generate_embeddings(
         };
         collection.upsert(entries, None).await?;
     }
+
+    // Load new documents into the embeddings database
+    let doc_types = vec!["functions", "traits", "type_aliases", "constants"];
+    for doc_type in doc_types {
+        let dir = std::fs::read_dir(format!("./docs/{}", doc_type))?;
+        for entry in dir {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            let file_name = path.file_name().unwrap().to_str().unwrap();
+            let entries = CollectionEntries {
+                ids: vec![file_name],
+                embeddings: Some(vec![
+                    ollama.embeddings(&std::fs::read_to_string(&path)?).await?,
+                ]),
+                ..Default::default()
+            };
+            collection.upsert(entries, None).await?;
+        }
+    }
+
     Ok(())
 }

@@ -20,3 +20,4 @@ bevy = { version = "0.15.0", default-features = false, features = [
 crossterm = "0.28.1"
 bevy-tokio-tasks = { git = "https://github.com/foxzool/bevy-tokio-tasks", branch = "upgrade" }
 xshell = "0.2"
+rustdoc-json = "0.1"
