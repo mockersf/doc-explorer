@@ -13,7 +13,7 @@ pub async fn generate_embeddings(
     let mut collection_meta = Map::new();
     collection_meta.insert("hnsw:space".to_string(), distance.into());
     let collection = chroma
-        .get_or_create_collection(collection_name, Some(collection_meta))
+        .get_or_create_collection(&collection_name, Some(collection_meta))
         .await?;
 
     let dir = std::fs::read_dir("./docs/structs")?;
