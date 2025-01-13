@@ -97,12 +97,20 @@ fn item_explorer(
             enum_explorer(enume, current_crate, crates, visited, depth);
         }
         rustdoc_types::ItemEnum::Variant(_) => {}
-        rustdoc_types::ItemEnum::Function(_) => {}
-        rustdoc_types::ItemEnum::Trait(_) => {}
+        rustdoc_types::ItemEnum::Function(func) => {
+            document_function(item, func);
+        }
+        rustdoc_types::ItemEnum::Trait(trait_item) => {
+            document_trait(item, trait_item);
+        }
         rustdoc_types::ItemEnum::TraitAlias(_) => todo!(),
         rustdoc_types::ItemEnum::Impl(_) => {}
-        rustdoc_types::ItemEnum::TypeAlias(_) => {}
-        rustdoc_types::ItemEnum::Constant { .. } => {}
+        rustdoc_types::ItemEnum::TypeAlias(type_alias) => {
+            document_type_alias(item, type_alias);
+        }
+        rustdoc_types::ItemEnum::Constant { type_: _, const_ } => {
+            document_constant(item, const_);
+        }
         rustdoc_types::ItemEnum::Static(_) => {}
         rustdoc_types::ItemEnum::ExternType => todo!(),
         rustdoc_types::ItemEnum::Macro(_) => {}
@@ -210,5 +218,128 @@ impl StructDocument {
                 }
             }
         }
+    }
+}
+
+struct FunctionDocument {
+    name: String,
+    docs: Option<String>,
+    signature: String,
+}
+
+pub fn document_function(item: &rustdoc_types::Item, func: &rustdoc_types::Function) {
+    std::fs::create_dir_all("docs/functions").unwrap();
+    let doc = FunctionDocument {
+        name: item.name.as_ref().unwrap().to_string(),
+        docs: item.docs.clone(),
+        signature: format!("{:?}", func.sig),
+    };
+    doc.write();
+}
+
+impl FunctionDocument {
+    pub fn write(&self) {
+        let mut file = std::fs::File::create(format!("docs/functions/{}.md", self.name)).unwrap();
+
+        write!(file, "{} is a function.\n\n", self.name).unwrap();
+        if let Some(docs) = &self.docs {
+            write!(file, "{}\n\n", docs).unwrap();
+        }
+        write!(file, "Signature: {}\n\n", self.signature).unwrap();
+    }
+}
+
+struct TraitDocument {
+    name: String,
+    docs: Option<String>,
+    items: Vec<String>,
+}
+
+pub fn document_trait(item: &rustdoc_types::Item, trait_item: &rustdoc_types::Trait) {
+    std::fs::create_dir_all("docs/traits").unwrap();
+    let doc = TraitDocument {
+        name: item.name.as_ref().unwrap().to_string(),
+        docs: item.docs.clone(),
+        items: trait_item
+            .items
+            .iter()
+            .map(|item| format!("{:?}", item))
+            .collect(),
+    };
+    doc.write();
+}
+
+impl TraitDocument {
+    pub fn write(&self) {
+        let mut file = std::fs::File::create(format!("docs/traits/{}.md", self.name)).unwrap();
+
+        write!(file, "{} is a trait.\n\n", self.name).unwrap();
+        if let Some(docs) = &self.docs {
+            write!(file, "{}\n\n", docs).unwrap();
+        }
+        if !self.items.is_empty() {
+            write!(file, "It has the following items: ").unwrap();
+            for item in &self.items {
+                write!(file, "{}, ", item).unwrap();
+            }
+            write!(file, "\n\n").unwrap();
+        }
+    }
+}
+
+struct TypeAliasDocument {
+    name: String,
+    docs: Option<String>,
+    type_alias: String,
+}
+
+pub fn document_type_alias(item: &rustdoc_types::Item, type_alias: &rustdoc_types::TypeAlias) {
+    std::fs::create_dir_all("docs/type_aliases").unwrap();
+    let doc = TypeAliasDocument {
+        name: item.name.as_ref().unwrap().to_string(),
+        docs: item.docs.clone(),
+        type_alias: format!("{:?}", type_alias.type_),
+    };
+    doc.write();
+}
+
+impl TypeAliasDocument {
+    pub fn write(&self) {
+        let mut file =
+            std::fs::File::create(format!("docs/type_aliases/{}.md", self.name)).unwrap();
+
+        write!(file, "{} is a type alias.\n\n", self.name).unwrap();
+        if let Some(docs) = &self.docs {
+            write!(file, "{}\n\n", docs).unwrap();
+        }
+        write!(file, "Type: {}\n\n", self.type_alias).unwrap();
+    }
+}
+
+struct ConstantDocument {
+    name: String,
+    docs: Option<String>,
+    value: String,
+}
+
+pub fn document_constant(item: &rustdoc_types::Item, constant: &rustdoc_types::Constant) {
+    std::fs::create_dir_all("docs/constants").unwrap();
+    let doc = ConstantDocument {
+        name: item.name.as_ref().unwrap().to_string(),
+        docs: item.docs.clone(),
+        value: format!("{:?}", constant.expr),
+    };
+    doc.write();
+}
+
+impl ConstantDocument {
+    pub fn write(&self) {
+        let mut file = std::fs::File::create(format!("docs/constants/{}.md", self.name)).unwrap();
+
+        write!(file, "{} is a constant.\n\n", self.name).unwrap();
+        if let Some(docs) = &self.docs {
+            write!(file, "{}\n\n", docs).unwrap();
+        }
+        write!(file, "Value: {}\n\n", self.value).unwrap();
     }
 }
